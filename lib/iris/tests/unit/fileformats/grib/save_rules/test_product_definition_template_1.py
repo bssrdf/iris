@@ -1,4 +1,4 @@
-# (C) British Crown Copyright 2013 - 2017, Met Office
+# (C) British Crown Copyright 2016 - 2017, Met Office
 #
 # This file is part of Iris.
 #
@@ -16,7 +16,7 @@
 # along with Iris.  If not, see <http://www.gnu.org/licenses/>.
 """
 Unit tests for
-:func:`iris.fileformats.grib._save_rules.product_definition_template_8`
+:func:`iris.fileformats.grib._save_rules.product_definition_template_1`
 
 """
 
@@ -31,29 +31,45 @@ from cf_units import Unit
 import gribapi
 
 from iris.coords import CellMethod, DimCoord
-from iris.fileformats.grib._save_rules import product_definition_template_8
+from iris.fileformats.grib._save_rules import product_definition_template_1
 from iris.tests import mock
 import iris.tests.stock as stock
 
 
-class TestProductDefinitionIdentifier(tests.IrisTest):
+class TestRealizationIdentifier(tests.IrisTest):
     def setUp(self):
         self.cube = stock.lat_lon_cube()
         # Rename cube to avoid warning about unknown discipline/parameter.
         self.cube.rename('air_temperature')
-        coord = DimCoord(23, 'time', bounds=[0, 100],
+        coord = DimCoord([45], 'time',
                          units=Unit('days since epoch', calendar='standard'))
         self.cube.add_aux_coord(coord)
 
     @mock.patch.object(gribapi, 'grib_set')
-    def test_product_definition(self, mock_set):
+    def test_realization(self, mock_set):
         cube = self.cube
-        cell_method = CellMethod(method='sum', coords=['time'])
-        cube.add_cell_method(cell_method)
+        coord = DimCoord(10, 'realization', units='1')
+        cube.add_aux_coord(coord)
 
-        product_definition_template_8(cube, mock.sentinel.grib)
+        product_definition_template_1(cube, mock.sentinel.grib)
         mock_set.assert_any_call(mock.sentinel.grib,
-                                 "productDefinitionTemplateNumber", 8)
+                                 "productDefinitionTemplateNumber", 1)
+        mock_set.assert_any_call(mock.sentinel.grib,
+                                 "perturbationNumber", 10)
+        mock_set.assert_any_call(mock.sentinel.grib,
+                                 "numberOfForecastsInEnsemble", 255)
+        mock_set.assert_any_call(mock.sentinel.grib,
+                                 "typeOfEnsembleForecast", 255)
+
+    @mock.patch.object(gribapi, 'grib_set')
+    def test_multiple_realization_values(self, mock_set):
+        cube = self.cube
+        coord = DimCoord([8, 9, 10], 'realization', units='1')
+        cube.add_aux_coord(coord, 0)
+
+        msg = "'realization' coordinate with one point is required"
+        with self.assertRaisesRegexp(ValueError, msg):
+            product_definition_template_1(cube, mock.sentinel.grib)
 
 
 if __name__ == "__main__":
